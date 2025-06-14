@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulación de Proxies y API Gateway</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #334155;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 2rem;
+    }
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 1.5rem;
+      background-color: #f1f5f9;
+      border-radius: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .flow-node {
+      background-color: #e2e8f0;
+      color: #1e293b;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      text-align: center;
+      flex-shrink: 0;
+      margin: 0.5rem;
+      transition: all 0.3s ease-in-out;
+      min-width: 100px;
+    }
+    .flow-node.active {
+      background-color: #3b82f6;
+      color: white;
+      transform: scale(1.05);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .flow-arrow {
+      font-size: 2rem;
+      color: #94a3b8;
+      margin: 0 0.5rem;
+      transition: all 0.3s ease-in-out;
+    }
+    .flow-arrow.active {
+      color: #3b82f6;
+      transform: scale(1.2);
+    }
+    .log-box {
+      height: 300px;
+      overflow-y: auto;
+      background-color: #1e293b;
+      color: #f1f5f9;
+      font-family: monospace;
+      font-size: 0.875rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container bg-white shadow-lg rounded-lg my-8">
+    <h1 class="text-4xl font-bold text-center text-blue-700 mb-6">Simulación de Proxies y API Gateway</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div class="p-6 border border-slate-200 rounded-lg shadow-sm">
+        <h2 class="text-2xl font-semibold text-blue-600 mb-4">Controles del Cliente</h2>
+        <div class="mb-4">
+          <label for="jwtInput" class="block text-slate-700 font-medium mb-2">Token JWT:</label>
+          <input type="text" id="jwtInput" value="Bearer token_valido" class="w-full p-2 border border-slate-300 rounded-md">
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <button id="scenario1Btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700">Registrar Préstamo (API Gateway)</button>
+          <button id="scenario1_5Btn" class="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600">Registrar Préstamo (Sin JWT)</button>
+          <button id="scenario2ListarBtn" class="bg-purple-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-purple-700 lg:col-span-2">Listar Estudiantes (Forward Proxy)</button>
+        </div>
+      </div>
+      <div class="p-6 border border-slate-200 rounded-lg shadow-sm">
+        <h2 class="text-2xl font-semibold text-blue-600 mb-4">Petición y Respuesta</h2>
+        <div class="mb-4">
+          <h3 class="text-lg font-medium text-slate-700">Petición:</h3>
+          <pre id="clientRequest" class="bg-slate-100 p-3 rounded-md text-sm text-slate-800 h-24 overflow-auto"></pre>
+        </div>
+        <div>
+          <h3 class="text-lg font-medium text-slate-700">Respuesta:</h3>
+          <p id="clientResponseStatus" class="font-bold text-lg mb-1"></p>
+          <pre id="clientResponseBody" class="bg-slate-100 p-3 rounded-md text-sm text-slate-800 h-24 overflow-auto"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-diagram">
+      <div id="node-client" class="flow-node">Cliente 👤</div>
+      <span id="arrow-client-fp" class="flow-arrow">➡️</span>
+      <div id="node-fp" class="flow-node">Forward Proxy 🛡️</div>
+      <span id="arrow-fp-rp" class="flow-arrow">➡️</span>
+      <div id="node-rp" class="flow-node">API Gateway 🚪</div>
+      <span id="arrow-rp-ms" class="flow-arrow">➡️</span>
+      <div id="node-ms-group" class="flex flex-col items-center">
+        <div id="node-ms-prestamos" class="flow-node text-xs">MS Préstamos 📚</div>
+        <div id="node-ms-estudiantes" class="flow-node text-xs">MS Estudiantes 🎓</div>
+      </div>
+    </div>
+
+    <div class="p-6 border border-slate-200 rounded-lg shadow-sm">
+      <h2 class="text-2xl font-semibold text-blue-600 mb-4">Logs de Componentes</h2>
+      <div id="logOutput" class="log-box">
+        <p class="text-slate-400">Esperando peticiones...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT de Simulación -->
+  <script>
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+    const logOutput = document.getElementById("logOutput");
+    const requestOutput = document.getElementById("clientRequest");
+    const responseStatus = document.getElementById("clientResponseStatus");
+    const responseBody = document.getElementById("clientResponseBody");
+
+    const highlight = (id) => {
+      const el = document.getElementById(id);
+      el.classList.add("active");
+      return el;
+    };
+
+    const unhighlightAll = () => {
+      document.querySelectorAll(".flow-node, .flow-arrow").forEach(e => e.classList.remove("active"));
+    };
+
+    const log = (msg) => {
+      logOutput.innerText += msg + "\n";
+      logOutput.scrollTop = logOutput.scrollHeight;
+    };
+
+    async function simulateFlow(path, method, jwt, scenario) {
+      unhighlightAll();
+      logOutput.innerText = "";
+      requestOutput.innerText = `${method} ${path}\nAuthorization: ${jwt || "(sin token)"}`;
+      responseStatus.innerText = "";
+      responseBody.innerText = "";
+
+      log("Cliente envía petición...");
+      highlight("node-client");
+      await delay(800);
+
+      if (scenario === "sin-jwt") {
+        highlight("arrow-client-fp"); await delay(300);
+        highlight("node-fp"); await delay(500);
+        log("Forward Proxy detecta ausencia de JWT → rechaza petición.");
+        responseStatus.innerText = "401 Unauthorized";
+        responseBody.innerText = "Falta el token JWT";
+        return;
+      }
+
+      highlight("arrow-client-fp"); await delay(300);
+      highlight("node-fp"); await delay(500);
+      log("Forward Proxy reenvía al API Gateway...");
+
+      highlight("arrow-fp-rp"); await delay(300);
+      highlight("node-rp"); await delay(500);
+
+      if (!jwt || !jwt.includes("token_valido")) {
+        log("API Gateway detecta JWT inválido.");
+        responseStatus.innerText = "403 Forbidden";
+        responseBody.innerText = "Token inválido";
+        return;
+      }
+
+      log("API Gateway reenvía al microservicio correspondiente...");
+
+      highlight("arrow-rp-ms"); await delay(300);
+
+      if (path.includes("prestamo")) {
+        highlight("node-ms-prestamos");
+        log("MS Préstamos procesa solicitud...");
+        responseStatus.innerText = "200 OK";
+        responseBody.innerText = "Préstamo registrado correctamente";
+      } else if (path.includes("estudiantes")) {
+        highlight("node-ms-estudiantes");
+        log("MS Estudiantes procesa solicitud...");
+        responseStatus.innerText = "200 OK";
+        responseBody.innerText = "Listado de estudiantes enviado";
+      } else {
+        responseStatus.innerText = "404 Not Found";
+        responseBody.innerText = "Ruta desconocida";
+      }
+    }
+
+    document.getElementById("scenario1Btn").addEventListener("click", () => {
+      simulateFlow("/prestamo", "POST", document.getElementById("jwtInput").value, "con-jwt");
+    });
+
+    document.getElementById("scenario1_5Btn").addEventListener("click", () => {
+      simulateFlow("/prestamo", "POST", "", "sin-jwt");
+    });
+
+    document.getElementById("scenario2ListarBtn").addEventListener("click", () => {
+      simulateFlow("/estudiantes", "GET", document.getElementById("jwtInput").value, "con-jwt");
+    });
+  </script>
+</body>
+</html>
