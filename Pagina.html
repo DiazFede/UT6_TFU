@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorador Interactivo: API Gateway</title>
+    <!-- Chosen Palette: Academic Blue -->
+    <!-- Application Structure Plan: Se ha diseñado una aplicación de página única con una barra de navegación lateral fija en escritorio (y superior en móvil) para una navegación clara y no lineal. Las secciones temáticas (Conceptos, Comparativa, Acción, Tecnologías, Análisis) agrupan el contenido del informe de manera lógica. La interacción se centra en desglosar información compleja en partes digeribles a través de tarjetas interactivas, diagramas animados paso a paso y visualizaciones comparativas, facilitando la comprensión de un tema técnico. Esta estructura fue elegida para transformar un documento denso en una herramienta de aprendizaje autodirigida y atractiva. -->
+    <!-- Visualization & Content Choices: 
+        - Introducción y Fundamentos -> Tarjetas Interactivas: Se utilizan tarjetas para cada funcionalidad del Gateway (Auth, Routing, etc.). Goal: Organizar/Informar. Interaction: Click para expandir y ver detalles, haciendo la información menos intimidante. Method: HTML/Tailwind/JS.
+        - Forward vs. Reverse Proxy -> Diagrama Comparativo Interactivo y Animado: Un layout lado a lado con diagramas de flujo simplificados que animan la trayectoria de la petición. Goal: Comparar/Demostrar. Interaction: Un interruptor (toggle) activa y destaca visualmente un tipo de proxy, explicando su rol práctico y flujo de comunicación con animación de elementos. Method: HTML/Tailwind/JS (animaciones CSS/JS).
+        - Escenario Práctico -> Flujo Animado con Elementos Visuales: Se recrea el diagrama de secuencia del informe como un flujo paso a paso, con elementos visuales que se activan y animan para mostrar el progreso de la solicitud. Goal: Explicar un proceso/Demostrar. Interaction: Botones de "Anterior/Siguiente" guían al usuario a través del flujo de una petición, explicando cada etapa con una representación visual dinámica. Method: HTML/Tailwind/JS (animaciones CSS/JS).
+        - Tecnologías -> Gráfico de Barras Comparativo y Pestañas: Se comparan las tecnologías en ejes de "Complejidad" y "Flexibilidad". Goal: Comparar/Informar. Interaction: Hover sobre las barras para más detalles y pestañas para leer sobre cada tecnología. Method: Chart.js/Canvas.
+        - Análisis Crítico -> Columnas de Ventajas/Desafíos: Presentación clara de pros y contras. Goal: Analizar. Interaction: Tarjetas informativas simples y directas. Method: HTML/Tailwind.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .content-section {
+            display: none;
+        }
+        .content-section.active {
+            display: block;
+        }
+        .nav-link.active {
+            background-color: #3b82f6; /* bg-blue-600 */
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 40vh;
+            width: 100%;
+            max-width: 700px;
+        }
+        .flow-step-text {
+            transition: all 0.3s ease-in-out;
+            opacity: 0.5;
+            border-left-width: 4px;
+            border-color: transparent;
+        }
+        .flow-step-text.active {
+            opacity: 1;
+            transform: scale(1.02);
+            border-color: #3b82f6; /* bg-blue-600 */
+            background-color: #eff6ff; /* bg-blue-50 */
+        }
+        .proxy-diagram-card {
+            transition: all 0.3s ease-in-out;
+            transform: scale(0.98);
+        }
+        .proxy-diagram-card.active-proxy {
+            transform: scale(1.02);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Styles for Flow Animation */
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 2rem 0;
+        }
+        .flow-node {
+            background-color: #e0f2fe; /* bg-blue-100 */
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px; /* rounded-full */
+            border: 2px solid #90cdf4; /* border-blue-300 */
+            font-weight: 600;
+            color: #2b6cb0; /* text-blue-800 */
+            margin-bottom: 1rem;
+            min-width: 120px;
+            text-align: center;
+            transition: all 0.3s ease-in-out;
+        }
+        .flow-node.active-node {
+            background-color: #3b82f6; /* bg-blue-500 */
+            color: white;
+            border-color: #1e40af; /* border-blue-700 */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .flow-arrow {
+            width: 2px;
+            background-color: #a0aec0; /* bg-gray-400 */
+            height: 2rem;
+            position: relative;
+            transition: background-color 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        .flow-arrow.active-arrow {
+            background-color: #3b82f6; /* bg-blue-500 */
+            transform: scaleY(1.2); /* little animation */
+        }
+        .flow-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%) rotate(45deg);
+            width: 8px;
+            height: 8px;
+            border-top: 2px solid #a0aec0;
+            border-right: 2px solid #a0aec0;
+            transition: border-color 0.3s ease-in-out;
+        }
+        .flow-arrow.active-arrow::after {
+            border-color: #3b82f6; /* bg-blue-500 */
+        }
+
+        /* Styles for Proxy Flow Diagrams */
+        .proxy-flow-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            white-space: pre; /* To maintain spacing for diagram arrows */
+            height: 80px; /* Fixed height for consistent diagram display */
+        }
+        .proxy-flow-element {
+            display: inline-block;
+            transition: all 0.3s ease-in-out;
+            opacity: 0.7;
+        }
+        .proxy-flow-element.active-flow-part {
+            opacity: 1;
+            font-weight: bold;
+            color: #3b82f6; /* blue-500 */
+            transform: translateY(-2px);
+        }
+        .proxy-flow-arrow {
+            display: inline-block;
+            transition: all 0.3s ease-in-out;
+            color: #a0aec0; /* gray-400 */
+        }
+        .proxy-flow-arrow.active-flow-part {
+            color: #3b82f6; /* blue-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-full md:w-64 bg-white shadow-md md:fixed md:h-full">
+            <div class="p-6">
+                <h1 class="text-2xl font-bold text-blue-600">API Gateway</h1>
+                <p class="text-sm text-slate-500">Explorador Interactivo</p>
+            </div>
+            <nav class="mt-4" id="nav-menu">
+                <a href="#inicio" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    Inicio
+                </a>
+                <a href="#conceptos" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Conceptos Clave
+                </a>
+                <a href="#comparativa" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                     <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                    Forward vs. Reverse
+                </a>
+                <a href="#accion" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Gateway en Acción
+                </a>
+                <a href="#tecnologias" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547a2 2 0 00-.547 1.806l.477 2.387a6 6 0 00.517 3.86l.158.318a6 6 0 00.517 3.86l.477 2.387a2 2 0 001.806.547a2 2 0 001.022-.547l2.387-.477a6 6 0 003.86-.517l.318-.158a6 6 0 013.86-.517l2.387.477a2 2 0 001.806-.547a2 2 0 00.547-1.806l-.477-2.387a6 6 0 00-.517-3.86l-.158-.318a6 6 0 00-.517-3.86l-.477-2.387zM12 16a4 4 0 100-8 4 4 0 000 8z"></path></svg>
+                    Tecnologías
+                </a>
+                <a href="#analisis" class="nav-link flex items-center py-3 px-6 text-slate-600 hover:bg-blue-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Análisis Crítico
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 md:ml-64 p-6 md:p-10">
+            <!-- Inicio Section -->
+            <section id="inicio" class="content-section">
+                <h2 class="text-3xl font-bold mb-4">Bienvenido al Explorador de API Gateway</h2>
+                <p class="text-lg text-slate-600 mb-6">Esta aplicación interactiva está diseñada para explicar el rol del API Gateway en las arquitecturas de software modernas.</p>
+                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-r-lg">
+                    <p>Usa la navegación a la izquierda para saltar a cualquier sección o sigue el orden para una experiencia de aprendizaje guiada.</p>
+                </div>
+            </section>
+
+            <!-- Conceptos Clave Section -->
+            <section id="conceptos" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Conceptos Clave del API Gateway</h2>
+                <p class="text-slate-600 mb-8">Un API Gateway actúa como un intermediario o "puerta de entrada" para todos los servicios internos de una aplicación. No solo dirige el tráfico, sino que realiza un conjunto de tareas cruciales. Haz clic en cada tarjeta para conocer sus funciones principales.</p>
+                <div id="functionalities-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+            </section>
+
+            <!-- Comparativa Proxy Section -->
+            <section id="comparativa" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Comparativa: Forward Proxy vs. Reverse Proxy</h2>
+                <p class="text-slate-600 mb-6">Para entender un API Gateway, primero hay que diferenciar los dos tipos principales de proxies. Aunque ambos son intermediarios, su función y perspectiva son opuestas. Usa el interruptor para explorar cada uno de estos **conceptos fundamentales**.</p>
+                
+                <div class="flex justify-center mb-6">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <span id="label-forward" class="mr-3 font-semibold text-blue-600">Forward Proxy</span>
+                        <div class="relative">
+                            <input type="checkbox" id="proxy-toggle" class="sr-only">
+                            <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                            <div id="proxy-dot" class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform"></div>
+                        </div>
+                        <span id="label-reverse" class="ml-3 font-semibold text-slate-400">Reverse Proxy</span>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Forward Proxy Column -->
+                    <div id="forward-proxy-col" class="proxy-diagram-card active-proxy p-6 bg-white rounded-lg shadow-md border-t-4 border-blue-500">
+                        <h3 class="text-2xl font-bold mb-4 text-center">Forward Proxy</h3>
+                        <p id="forward-proxy-desc" class="text-slate-600 mb-4"></p>
+                        <div id="forward-proxy-diagram" class="proxy-flow-container mt-4 p-4 bg-slate-100 rounded-lg text-center font-mono text-lg">
+                            <span class="proxy-flow-element" data-part="client">Cliente 💻</span> 
+                            <span class="proxy-flow-arrow" data-part="arrow1">--petición--></span> 
+                            <span class="proxy-flow-element" data-part="proxy">Forward Proxy 🛡️</span> 
+                            <span class="proxy-flow-arrow" data-part="arrow2">--petición--></span> 
+                            <span class="proxy-flow-element" data-part="server">🌐 Servidor Externo</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-4 text-center">Ejemplos de uso: control de acceso en empresas, anonimato personal.</p>
+                    </div>
+                    <!-- Reverse Proxy Column -->
+                    <div id="reverse-proxy-col" class="proxy-diagram-card p-6 bg-white rounded-lg shadow-md border-t-4 border-slate-300 opacity-50">
+                        <h3 class="text-2xl font-bold mb-4 text-center">Reverse Proxy</h3>
+                        <p id="reverse-proxy-desc" class="text-slate-600 mb-4"></p>
+                        <div id="reverse-proxy-diagram" class="proxy-flow-container mt-4 p-4 bg-slate-100 rounded-lg text-center font-mono text-lg">
+                            <span class="proxy-flow-element" data-part="client">Cliente 💻</span> 
+                            <span class="proxy-flow-arrow" data-part="arrow1">--petición--></span> 
+                            <span class="proxy-flow-element" data-part="proxy">Reverse Proxy 🚪</span> 
+                            <span class="proxy-flow-arrow" data-part="arrow2">--petición--></span> 
+                            <span class="proxy-flow-element" data-part="server">⚙️ Servicio Interno</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-4 text-center">Ejemplos de uso: balanceo de carga para sitios web, seguridad de servidores.</p>
+                    </div>
+                </div>
+                 <div class="mt-8 bg-green-100 border-l-4 border-green-500 text-green-800 p-4 rounded-r-lg">
+                    <p><strong class="font-bold">Conclusión Clave:</strong> Un API Gateway es una forma avanzada de **Reverse Proxy**, ya que actúa en nombre de los servidores. Sin embargo, añade mucha más inteligencia a nivel de aplicación, como veremos en la siguiente sección.</p>
+                </div>
+            </section>
+
+            <!-- Gateway en Acción Section -->
+            <section id="accion" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">El Gateway en Acción: Un Flujo Práctico</h2>
+                <p class="text-slate-600 mb-6">Imaginemos una aplicación universitaria. Un estudiante quiere registrar un préstamo de un libro desde la app. Veamos paso a paso cómo el API Gateway gestiona esta solicitud de forma segura y eficiente. Usa los botones para navegar por el flujo.</p>
+                
+                <div class="flex flex-col lg:flex-row gap-8">
+                    <div class="w-full lg:w-1/2 flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-md">
+                        <div id="gateway-flow-visual" class="flow-diagram w-full max-w-sm">
+                            <div id="visual-client" class="flow-node">Cliente 👤</div>
+                            <div id="arrow-1" class="flow-arrow"></div>
+                            <div id="visual-gateway" class="flow-node">API Gateway 🚪</div>
+                            <div id="arrow-2" class="flow-arrow"></div>
+                            <div id="visual-service" class="flow-node">Microservicio ⚙️</div>
+                            <div id="arrow-3" class="flow-arrow"></div>
+                            <div id="visual-response" class="flow-node">Respuesta ✨</div>
+                        </div>
+                    </div>
+                    <div class="w-full lg:w-1/2 bg-white p-6 rounded-lg shadow-md">
+                        <div id="flow-diagram-container" class="space-y-2 mb-6">
+                            <!-- Los elementos flow-step-text se inyectarán aquí -->
+                        </div>
+                        <h3 class="text-xl font-bold mb-4">Detalle del Paso:</h3>
+                        <div id="flow-step-details">
+                            <h4 id="step-title" class="text-lg font-semibold text-blue-600"></h4>
+                            <p id="step-description" class="mt-2 text-slate-600"></p>
+                        </div>
+                        <div class="mt-6 flex justify-center gap-4">
+                            <button id="prev-step-btn" class="bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+                            <button id="next-step-btn" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tecnologías Section -->
+            <section id="tecnologias" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Tecnologías Comunes</h2>
+                <p class="text-slate-600 mb-6">Existen muchas herramientas para implementar un API Gateway. Cada una tiene sus fortalezas. El siguiente gráfico compara algunas de las más populares en dos ejes: **Complejidad de Gestión** y **Flexibilidad/Extensibilidad**. Los datos son ilustrativos para fines de comparación conceptual.</p>
+                
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="chart-container">
+                        <canvas id="techChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-2xl font-bold mb-4">Explora las Tecnologías</h3>
+                    <div id="tech-tabs-buttons" class="flex border-b border-slate-200"></div>
+                    <div id="tech-tabs-content" class="mt-4 bg-white p-6 rounded-lg shadow-inner"></div>
+                </div>
+            </section>
+            
+            <!-- Análisis Crítico Section -->
+            <section id="analisis" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Análisis Crítico: Ventajas y Desafíos</h2>
+                <p class="text-slate-600 mb-8">Aunque el patrón API Gateway es extremadamente poderoso, no es una solución mágica. Es importante comprender tanto sus beneficios como los desafíos que presenta su implementación.</p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-4 text-green-600">Ventajas</h3>
+                        <div id="advantages-list" class="space-y-4"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-4 text-red-600">Desafíos</h3>
+                         <div id="challenges-list" class="space-y-4"></div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const data = {
+        functionalities: [
+            { id: 'auth', title: 'Autenticación y Autorización', icon: '🛡️', description: 'Centraliza la seguridad, validando la identidad y los permisos de cada solicitud antes de que llegue a los servicios internos. Libera a los microservicios de esta tarea crítica.' },
+            { id: 'routing', title: 'Enrutamiento de Peticiones', icon: '🔀', description: 'Actúa como un director de tráfico, dirigiendo cada solicitud al microservicio correcto basándose en la ruta, encabezados u otros criterios. Oculta la complejidad de la red interna.' },
+            { id: 'rate-limiting', title: 'Limitación de Tasa', icon: '⏱️', description: 'Protege a los servicios de sobrecargas o abusos controlando cuántas solicitudes puede hacer un cliente en un período de tiempo. Esencial para la estabilidad del sistema.' },
+            { id: 'transformation', title: 'Transformación', icon: '🔄', description: 'Adapta los datos sobre la marcha, convirtiendo formatos (ej. JSON a XML) o protocolos para asegurar la compatibilidad entre clientes y servicios heterogéneos.' },
+            { id: 'aggregation', title: 'Agregación de Datos', icon: '➕', description: 'Combina respuestas de múltiples servicios en una sola. Reduce el número de llamadas que el cliente debe hacer, mejorando el rendimiento y simplificando la lógica del cliente.' },
+            { id: 'versioning', title: 'Gestión de Versiones', icon: '🔖', description: 'Permite que diferentes versiones de una API coexistan, enrutando a los clientes a la versión correcta. Facilita las actualizaciones sin romper la compatibilidad con clientes antiguos.' }
+        ],
+        proxies: {
+            forward: {
+                description: 'Actúa en nombre del **cliente**. Se utiliza para controlar el acceso a recursos externos, filtrar contenido o proporcionar anonimato. El cliente sabe que lo está usando.',
+                diagram: [
+                    { type: 'element', label: 'Cliente 💻', part: 'client' },
+                    { type: 'arrow', label: '--petición-->', part: 'arrow1' },
+                    { type: 'element', label: 'Forward Proxy 🛡️', part: 'proxy' },
+                    { type: 'arrow', label: '--petición-->', part: 'arrow2' },
+                    { type: 'element', label: '🌐 Servidor Externo', part: 'server' }
+                ]
+            },
+            reverse: {
+                description: 'Actúa en nombre del **servidor**. Se usa para balancear carga, proporcionar seguridad y caché. El cliente no sabe que existe; piensa que habla directamente con el servidor.',
+                diagram: [
+                    { type: 'element', label: 'Cliente 💻', part: 'client' },
+                    { type: 'arrow', label: '--petición-->', part: 'arrow1' },
+                    { type: 'element', label: 'Reverse Proxy 🚪', part: 'proxy' },
+                    { type: 'arrow', label: '--petición-->', part: 'arrow2' },
+                    { type: 'element', label: '⚙️ Servicio Interno', part: 'server' }
+                ]
+            }
+        },
+        flowSteps: [
+            { 
+                title: '1. Solicitud del Cliente', 
+                description: 'El cliente (app web/móvil) envía una petición para registrar un préstamo a la dirección pública del API Gateway. Incluye un token de seguridad (JWT) para identificarse.',
+                activeNodes: ['visual-client'],
+                activeArrows: []
+            },
+            { 
+                title: '2. Autenticación en el Gateway', 
+                description: 'El Gateway intercepta la solicitud. Valida que el token JWT sea correcto y que el usuario tenga permiso para realizar la operación. Si no es válido, rechaza la petición aquí mismo.',
+                activeNodes: ['visual-client', 'visual-gateway'],
+                activeArrows: ['arrow-1']
+            },
+            { 
+                title: '3. Enrutamiento Inteligente', 
+                description: 'Una vez autenticada, el Gateway analiza la ruta (`/api/prestamos/registrar`) y, según sus reglas, sabe que debe enviar esta solicitud al microservicio de Préstamos.',
+                activeNodes: ['visual-client', 'visual-gateway'],
+                activeArrows: ['arrow-1', 'arrow-2']
+            },
+            { 
+                title: '4. Interacción con el Microservicio', 
+                description: 'El Gateway reenvía la solicitud al microservicio de Préstamos. Este servicio ya confía en que la solicitud es segura y se concentra únicamente en su lógica de negocio: registrar el préstamo.',
+                activeNodes: ['visual-client', 'visual-gateway', 'visual-service'],
+                activeArrows: ['arrow-1', 'arrow-2']
+            },
+            { 
+                title: '5. Respuesta Unificada', 
+                description: 'El microservicio de Préstamos responde al Gateway. El Gateway, a su vez, reenvía esta respuesta final al cliente, completando el ciclo de la solicitud.',
+                activeNodes: ['visual-client', 'visual-gateway', 'visual-service', 'visual-response'],
+                activeArrows: ['arrow-1', 'arrow-2', 'arrow-3']
+            }
+        ],
+        technologies: [
+            { name: 'NGINX', complexity: 3, flexibility: 5, description: 'Servidor web de alto rendimiento, excelente como Reverse Proxy. Se puede extender para funciones de Gateway, siendo una opción ligera y muy rápida para tareas de enrutamiento y balanceo.' },
+            { name: 'Kong', complexity: 7, flexibility: 9, description: 'Gateway completo construido sobre NGINX. Su fortaleza es su arquitectura de plugins, que permite añadir funcionalidades avanzadas (seguridad, monitoreo) de forma modular. Ideal para gestión compleja.' },
+            { name: 'AWS API Gateway', complexity: 5, flexibility: 7, description: 'Servicio totalmente administrado en la nube de Amazon. Se integra perfectamente con el ecosistema de AWS (ej. Lambda). Es serverless, escalable y se paga por uso, ideal para arquitecturas cloud-native.' },
+            { name: 'Spring Cloud Gateway', complexity: 6, flexibility: 8, description: 'Diseñado para el ecosistema Java/Spring. Es reactivo y no bloqueante, lo que le da un gran rendimiento. La elección predilecta para arquitecturas de microservicios basadas en Spring.' },
+            { name: 'Traefik', complexity: 4, flexibility: 6, description: 'Un reverse proxy moderno, nativo para contenedores. Su punto fuerte es el auto-descubrimiento de servicios en entornos como Docker y Kubernetes, lo que simplifica enormemente la configuración dinámica.' }
+        ],
+        analysis: {
+            advantages: [
+                { title: 'Seguridad Centralizada', description: 'Unifica la aplicación de políticas de seguridad en un solo punto, protegiendo todo el sistema de forma consistente.' },
+                { title: 'Simplificación para el Cliente', description: 'Los clientes solo interactúan con un punto final, independientemente de cuántos microservicios haya detrás. Esto reduce la complejidad del código del cliente.' },
+                { title: 'Desacoplamiento', description: 'Permite que los servicios internos evolucionen (cambien, se actualicen) sin afectar a los clientes que consumen la API.' },
+                { title: 'Monitoreo y Métricas', description: 'Al ser el punto de entrada, es el lugar perfecto para recopilar datos sobre el uso, rendimiento y errores de las APIs.' }
+            ],
+            challenges: [
+                { title: 'Punto Único de Fallo (SPOF)', description: 'Si el Gateway falla, todo el sistema puede volverse inaccesible. Requiere una arquitectura de alta disponibilidad y redundancia.' },
+                { title: 'Latencia Adicional', description: 'Cada solicitud pasa por una capa extra, lo que puede añadir una pequeña demora. Es crucial optimizar su rendimiento.' },
+                { title: 'Complejidad de Gestión', description: 'Un Gateway con muchas funcionalidades puede ser complejo de configurar y mantener, requiriendo conocimiento especializado.' },
+                { title: 'Riesgo de "Monolito"', description: 'Si se le añade demasiada lógica de negocio, puede convertirse en un nuevo cuello de botella, contradiciendo los principios de los microservicios.' }
+            ]
+        }
+    };
+    
+    // --- Navigation Logic ---
+    const navLinks = document.querySelectorAll('.nav-link');
+    const contentSections = document.querySelectorAll('.content-section');
+
+    function updateContent(hash) {
+        contentSections.forEach(section => {
+            section.classList.remove('active');
+        });
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+
+        const activeSection = document.querySelector(hash);
+        const activeLink = document.querySelector(`a[href="${hash}"]`);
+
+        if (activeSection) {
+            activeSection.classList.add('active');
+        }
+        if (activeLink) {
+            activeLink.classList.add('active');
+        }
+    }
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const hash = link.getAttribute('href');
+            window.location.hash = hash;
+        });
+    });
+
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash || '#inicio';
+        updateContent(hash);
+    });
+
+    // Initial load
+    const initialHash = window.location.hash || '#inicio';
+    updateContent(initialHash);
+
+    // --- Conceptos Clave Section Logic ---
+    const functionalitiesGrid = document.getElementById('functionalities-grid');
+    data.functionalities.forEach(func => {
+        const card = document.createElement('div');
+        card.className = 'bg-white p-6 rounded-lg shadow-md cursor-pointer hover:shadow-xl hover:scale-105 transition-all flex flex-col justify-between';
+        card.innerHTML = `
+            <div>
+                <div class="flex items-center">
+                    <span class="text-3xl mr-4">${func.icon}</span>
+                    <h3 class="text-xl font-bold">${func.title}</h3>
+                </div>
+                <p class="mt-4 text-slate-600 hidden">${func.description}</p>
+            </div>
+        `;
+        card.addEventListener('click', (e) => {
+            card.querySelector('p').classList.toggle('hidden');
+        });
+        functionalitiesGrid.appendChild(card);
+    });
+
+    // --- Comparativa Proxy Section Logic ---
+    const proxyToggle = document.getElementById('proxy-toggle');
+    const dot = document.getElementById('proxy-dot');
+    const labelForward = document.getElementById('label-forward');
+    const labelReverse = document.getElementById('label-reverse');
+    const forwardCol = document.getElementById('forward-proxy-col');
+    const reverseCol = document.getElementById('reverse-proxy-col');
+
+    function renderProxyDiagram(containerId, diagramData) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; // Clear previous content
+        diagramData.forEach(item => {
+            const span = document.createElement('span');
+            span.className = `proxy-flow-element ${item.type === 'arrow' ? 'proxy-flow-arrow' : ''}`;
+            span.dataset.part = item.part;
+            span.textContent = item.label;
+            container.appendChild(span);
+        });
+    }
+
+    function animateProxyFlow(containerId, isActive) {
+        const elements = document.querySelectorAll(`#${containerId} .proxy-flow-element, #${containerId} .proxy-flow-arrow`);
+        if (isActive) {
+            elements.forEach((el, index) => {
+                setTimeout(() => {
+                    el.classList.add('active-flow-part');
+                }, index * 150); // Stagger animation
+            });
+        } else {
+            elements.forEach(el => el.classList.remove('active-flow-part'));
+        }
+    }
+
+    document.getElementById('forward-proxy-desc').innerHTML = data.proxies.forward.description;
+    renderProxyDiagram('forward-proxy-diagram', data.proxies.forward.diagram);
+    document.getElementById('reverse-proxy-desc').innerHTML = data.proxies.reverse.description;
+    renderProxyDiagram('reverse-proxy-diagram', data.proxies.reverse.diagram);
+
+    function updateProxyDisplay(isReverse) {
+        if (isReverse) {
+            dot.style.transform = 'translateX(100%)';
+            labelReverse.classList.add('text-blue-600');
+            labelReverse.classList.remove('text-slate-400');
+            labelForward.classList.remove('text-blue-600');
+            labelForward.classList.add('text-slate-400');
+            
+            reverseCol.classList.remove('opacity-50', 'border-slate-300');
+            reverseCol.classList.add('active-proxy', 'border-blue-500');
+            
+            forwardCol.classList.add('opacity-50', 'border-slate-300');
+            forwardCol.classList.remove('active-proxy', 'border-blue-500');
+
+            animateProxyFlow('reverse-proxy-diagram', true);
+            animateProxyFlow('forward-proxy-diagram', false);
+        } else {
+            dot.style.transform = 'translateX(0)';
+            labelForward.classList.add('text-blue-600');
+            labelForward.classList.remove('text-slate-400');
+            labelReverse.classList.remove('text-blue-600');
+            labelReverse.classList.add('text-slate-400');
+
+            forwardCol.classList.remove('opacity-50', 'border-slate-300');
+            forwardCol.classList.add('active-proxy', 'border-blue-500');
+
+            reverseCol.classList.add('opacity-50', 'border-slate-300');
+            reverseCol.classList.remove('active-proxy', 'border-blue-500');
+
+            animateProxyFlow('forward-proxy-diagram', true);
+            animateProxyFlow('reverse-proxy-diagram', false);
+        }
+    }
+
+    proxyToggle.addEventListener('change', () => {
+        updateProxyDisplay(proxyToggle.checked);
+    });
+
+    // Initial state for proxy display
+    updateProxyDisplay(proxyToggle.checked);
+
+
+    // --- Gateway en Acción Section Logic ---
+    const visualNodes = {
+        'visual-client': document.getElementById('visual-client'),
+        'visual-gateway': document.getElementById('visual-gateway'),
+        'visual-service': document.getElementById('visual-service'),
+        'visual-response': document.getElementById('visual-response')
+    };
+    const visualArrows = {
+        'arrow-1': document.getElementById('arrow-1'),
+        'arrow-2': document.getElementById('arrow-2'),
+        'arrow-3': document.getElementById('arrow-3')
+    };
+
+    const flowStepTextContainer = document.getElementById('flow-diagram-container');
+    const stepTitle = document.getElementById('step-title');
+    const stepDescription = document.getElementById('step-description');
+    const prevBtn = document.getElementById('prev-step-btn');
+    const nextBtn = document.getElementById('next-step-btn');
+    let currentFlowStep = 0;
+
+    data.flowSteps.forEach((step, index) => {
+        const stepTextEl = document.createElement('div');
+        stepTextEl.className = 'flow-step-text p-4 rounded-lg bg-white shadow cursor-pointer'; // Added cursor-pointer
+        stepTextEl.dataset.index = index;
+        stepTextEl.innerHTML = `<h4 class="font-semibold">${step.title}</h4>`;
+        stepTextEl.addEventListener('click', () => { // Added click listener
+            currentFlowStep = index;
+            updateFlowDemonstration(currentFlowStep);
+        });
+        flowStepTextContainer.appendChild(stepTextEl);
+    });
+
+    function updateFlowDemonstration(index) {
+        // Update text steps
+        document.querySelectorAll('.flow-step-text').forEach(el => el.classList.remove('active'));
+        const activeTextStepEl = document.querySelector(`.flow-step-text[data-index="${index}"]`);
+        if(activeTextStepEl) activeTextStepEl.classList.add('active');
+
+        stepTitle.textContent = data.flowSteps[index].title;
+        stepDescription.textContent = data.flowSteps[index].description;
+        
+        // Update visual nodes and arrows
+        Object.values(visualNodes).forEach(node => node.classList.remove('active-node'));
+        Object.values(visualArrows).forEach(arrow => arrow.classList.remove('active-arrow'));
+
+        data.flowSteps[index].activeNodes.forEach(nodeId => {
+            if (visualNodes[nodeId]) visualNodes[nodeId].classList.add('active-node');
+        });
+        data.flowSteps[index].activeArrows.forEach(arrowId => {
+            if (visualArrows[arrowId]) visualArrows[arrowId].classList.add('active-arrow');
+        });
+
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === data.flowSteps.length - 1;
+    }
+
+    prevBtn.addEventListener('click', () => {
+        if (currentFlowStep > 0) {
+            currentFlowStep--;
+            updateFlowDemonstration(currentFlowStep);
+        }
+    });
+
+    nextBtn.addEventListener('click', () => {
+        if (currentFlowStep < data.flowSteps.length - 1) {
+            currentFlowStep++;
+            updateFlowDemonstration(currentFlowStep);
+        }
+    });
+
+    updateFlowDemonstration(0); // Initialize the flow demonstration
+
+    // --- Tecnologías Section Logic ---
+    const ctx = document.getElementById('techChart').getContext('2d');
+    const techChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.technologies.map(t => t.name),
+            datasets: [
+                {
+                    label: 'Complejidad de Gestión',
+                    data: data.technologies.map(t => t.complexity),
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Flexibilidad/Extensibilidad',
+                    data: data.technologies.map(t => t.flexibility),
+                    backgroundColor: 'rgba(22, 163, 74, 0.5)',
+                    borderColor: 'rgba(22, 163, 74, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 10,
+                    title: {
+                        display: true,
+                        text: 'Puntuación (1-10)'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    const techTabsButtons = document.getElementById('tech-tabs-buttons');
+    const techTabsContent = document.getElementById('tech-tabs-content');
+    data.technologies.forEach((tech, index) => {
+        const button = document.createElement('button');
+        button.textContent = tech.name;
+        button.className = 'tech-tab-btn py-2 px-4 text-slate-500 font-semibold';
+        if (index === 0) {
+            button.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            techTabsContent.textContent = tech.description;
+        }
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.tech-tab-btn').forEach(btn => {
+                btn.classList.remove('border-b-2', 'border-blue-500', 'text-blue-600');
+            });
+            button.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            techTabsContent.textContent = tech.description;
+        });
+        techTabsButtons.appendChild(button);
+    });
+    
+    // --- Análisis Section Logic ---
+    const advantagesList = document.getElementById('advantages-list');
+    data.analysis.advantages.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded-lg shadow';
+        card.innerHTML = `
+            <h4 class="font-bold text-lg">${item.title}</h4>
+            <p class="text-slate-600 mt-1">${item.description}</p>
+        `;
+        advantagesList.appendChild(card);
+    });
+
+    const challengesList = document.getElementById('challenges-list');
+    data.analysis.challenges.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded-lg shadow';
+        card.innerHTML = `
+            <h4 class="font-bold text-lg">${item.title}</h4>
+            <p class="text-slate-600 mt-1">${item.description}</p>
+        `;
+        challengesList.appendChild(card);
+    });
+});
+</script>
+
+</body>
+</html>
